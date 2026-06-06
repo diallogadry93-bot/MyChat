@@ -1,0 +1,2 @@
+CREATE DATABASE mychat_test;
+GRANT ALL PRIVILEGES ON DATABASE mychat_test TO mychat;
