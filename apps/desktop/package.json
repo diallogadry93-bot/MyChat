@@ -1,0 +1,22 @@
+{
+  "name": "@mychat/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MyChat desktop app — Tauri 2",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf src-tauri/target *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@mychat/shared": "workspace:*",
+    "@tauri-apps/api": "^2.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.4.0"
+  }
+}
