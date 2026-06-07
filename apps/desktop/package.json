@@ -11,7 +11,7 @@
     "clean": "rm -rf src-tauri/target *.tsbuildinfo"
   },
   "dependencies": {
-    "@mychat/shared": "workspace:*",
+    "@mychat/shared": "*",
     "@tauri-apps/api": "^2.0.0"
   },
   "devDependencies": {
