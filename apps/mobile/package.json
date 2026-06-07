@@ -17,8 +17,8 @@
     "test": "jest"
   },
   "dependencies": {
-    "@mychat/shared": "workspace:*",
-    "@mychat/ui": "workspace:*",
+    "@mychat/shared": "*",
+    "@mychat/ui": "*",
     "expo": "~51.0.0",
     "expo-router": "~3.5.0",
     "expo-status-bar": "~1.12.1",

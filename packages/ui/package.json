@@ -29,7 +29,7 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
-    "@mychat/shared": "workspace:*",
+    "@mychat/shared": "*",
     "clsx": "^2.1.0",
     "tailwind-merge": "^2.2.0"
   }
