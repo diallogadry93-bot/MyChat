@@ -60,3 +60,17 @@ export interface MessageEdit {
 
 export const SELF_DESTRUCT_SECONDS = [5, 30, 60, 300, 3600, 86400] as const
 export type SelfDestructSeconds = (typeof SELF_DESTRUCT_SECONDS)[number]
+
+// ── Call types ─────────────────────────────────────────────
+export type CallType  = 'voice' | 'video'
+export type CallState = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended'
+
+export interface CallLog {
+  id:              string
+  chatId:          string
+  initiatedBy:     string
+  callType:        CallType
+  startedAt:       Date
+  endedAt:         Date | null
+  durationSeconds: number | null
+}
