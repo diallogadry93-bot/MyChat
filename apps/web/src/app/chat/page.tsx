@@ -9,8 +9,9 @@ import { MessageBubble }   from '@/components/chat/MessageBubble'
 import { MessageInput }    from '@/components/chat/MessageInput'
 import { TypingIndicator } from '@/components/chat/TypingIndicator'
 import { CallView }        from '@/components/call/CallView'
+import { SmartReplies }    from '@/components/ai/SmartReplies'
+import { ChatSummary }     from '@/components/ai/ChatSummary'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 interface Message {
   id: string; senderId: string; type: string; bodyEncrypted: string
   editedAt: string | null; selfDestructAt: string | null; createdAt: string
@@ -28,25 +29,24 @@ export default function ChatPage() {
   const { user, accessToken, logout } = useAuth()
   const { socket, connected }         = useSocket({ token: accessToken })
 
-  const [chats, setChats]         = useState<Chat[]>([])
-  const [activeChatId, setActive] = useState<string | null>(null)
-  const [messages, setMessages]   = useState<Message[]>([])
-  const [typingUsers, setTyping]  = useState<string[]>([])
-  const [loadingMsgs, setLoading] = useState(false)
-  const [editingMsg, setEditing]  = useState<Message | null>(null)
+  const [chats, setChats]           = useState<Chat[]>([])
+  const [activeChatId, setActive]   = useState<string | null>(null)
+  const [messages, setMessages]     = useState<Message[]>([])
+  const [typingUsers, setTyping]    = useState<string[]>([])
+  const [loadingMsgs, setLoading]   = useState(false)
+  const [editingMsg, setEditing]    = useState<Message | null>(null)
+  const [inputText, setInputText]   = useState('')
+  const [unreadCount, setUnread]    = useState(0)
   const bottomRef    = useRef<HTMLDivElement>(null)
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
-  // Call hook
+  const lastMessageAt = messages[messages.length - 1]?.createdAt ?? null
+
   const {
     callState, callId, callType, participants, localStream,
     audioMuted, videoOff, screenSharing,
     startCall, answerCall, endCall, toggleAudio, toggleVideo, toggleScreenShare,
-  } = useCall({
-    socket,
-    currentUserId: user?.id ?? '',
-    onCallEnded:   () => console.info('Call ended'),
-  })
+  } = useCall({ socket, currentUserId: user?.id ?? '' })
 
   useEffect(() => {
     if (!user && typeof window !== 'undefined') window.location.href = '/auth/login'
@@ -60,6 +60,7 @@ export default function ChatPage() {
   useEffect(() => {
     if (!activeChatId || !accessToken) return
     setLoading(true)
+    setUnread(0)
     api.messages.list(accessToken, activeChatId)
       .then(r => { setMessages(r.messages as Message[]); setTyping([]) })
       .catch(console.error)
@@ -75,10 +76,10 @@ export default function ChatPage() {
     socket.on('message:new', (msg: unknown) => {
       const m = msg as Message & { chatId?: string }
       setMessages(prev => prev.find(p => p.id === m.id) ? prev : [...prev, m])
+      setUnread(n => n + 1)
       setChats(prev => prev.map(c =>
         c.id === (m as unknown as { chatId: string }).chatId
-          ? { ...c, lastMessage: { bodyEncrypted: m.bodyEncrypted, createdAt: m.createdAt } }
-          : c
+          ? { ...c, lastMessage: { bodyEncrypted: m.bodyEncrypted, createdAt: m.createdAt } } : c
       ))
     })
     socket.on('message:edited',   (u: unknown) => { const m = u as Message; setMessages(p => p.map(x => x.id === m.id ? { ...x, ...m } : x)) })
@@ -111,20 +112,20 @@ export default function ChatPage() {
     }).catch(console.error)
   }, [activeChatId, accessToken])
 
-  const handleReact  = useCallback(async (messageId: string, emoji: string) => {
+  const handleReact  = useCallback(async (msgId: string, emoji: string) => {
     if (!accessToken) return
-    await api.messages.react(accessToken, messageId, emoji).catch(console.error)
+    await api.messages.react(accessToken, msgId, emoji).catch(console.error)
   }, [accessToken])
 
-  const handleEdit   = useCallback(async (messageId: string, newText: string) => {
+  const handleEdit   = useCallback(async (msgId: string, text: string) => {
     if (!accessToken) return
-    await api.messages.edit(accessToken, messageId, { bodyEncrypted: newText, iv: 'plaintext-phase2' }).catch(console.error)
+    await api.messages.edit(accessToken, msgId, { bodyEncrypted: text, iv: 'plaintext-phase2' }).catch(console.error)
     setEditing(null)
   }, [accessToken])
 
-  const handleDelete = useCallback(async (messageId: string) => {
+  const handleDelete = useCallback(async (msgId: string) => {
     if (!accessToken || !confirm('Delete this message?')) return
-    await api.messages.delete(accessToken, messageId).catch(console.error)
+    await api.messages.delete(accessToken, msgId).catch(console.error)
   }, [accessToken])
 
   const activeChat = chats.find(c => c.id === activeChatId)
@@ -134,7 +135,6 @@ export default function ChatPage() {
 
   return (
     <>
-      {/* Call overlay */}
       {callState !== 'idle' && (
         <CallView
           callState={callState} callType={callType} callId={callId}
@@ -151,7 +151,6 @@ export default function ChatPage() {
       )}
 
       <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
-
         {/* Sidebar */}
         <aside className="w-80 flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
           <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
@@ -173,16 +172,16 @@ export default function ChatPage() {
           </div>
           <ChatSidebar
             chats={chats} activeChatId={activeChatId} currentUserId={user.id}
-            onSelectChat={setActive}
+            onSelectChat={(id) => { setActive(id); setUnread(0) }}
             onNewChat={() => alert('New chat — coming soon!')}
           />
         </aside>
 
-        {/* Main */}
+        {/* Main panel */}
         <main className="flex-1 flex flex-col min-w-0">
           {activeChat ? (
             <>
-              {/* Chat header + call buttons */}
+              {/* Header */}
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center text-white font-semibold text-sm">
@@ -190,29 +189,33 @@ export default function ChatPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-sm text-gray-900 dark:text-white">{chatName}</p>
-                    <p className="text-xs text-gray-400">{activeChat.members.length} members · 🔒 Encrypted</p>
+                    <p className="text-xs text-gray-400">{activeChat.members.length} members · 🔒 Encrypted · ✨ AI</p>
                   </div>
                 </div>
-                {/* Call buttons */}
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => { void startCall(activeChatId!, 'voice', accessToken!) }}
                     disabled={callState !== 'idle'}
-                    className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 transition disabled:opacity-40"
+                    className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition disabled:opacity-40"
                     title="Voice call"
-                  >
-                    📞
-                  </button>
+                  >📞</button>
                   <button
                     onClick={() => { void startCall(activeChatId!, 'video', accessToken!) }}
                     disabled={callState !== 'idle'}
-                    className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 transition disabled:opacity-40"
+                    className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center transition disabled:opacity-40"
                     title="Video call"
-                  >
-                    📹
-                  </button>
+                  >📹</button>
                 </div>
               </div>
+
+              {/* AI summary banner — shows when 10+ unread */}
+              {unreadCount >= 10 && activeChatId && accessToken && (
+                <ChatSummary
+                  chatId={activeChatId}
+                  accessToken={accessToken}
+                  unreadCount={unreadCount}
+                />
+              )}
 
               {/* Messages */}
               <div className="flex-1 overflow-y-auto px-4 py-4">
@@ -222,13 +225,16 @@ export default function ChatPage() {
                   <div className="flex flex-col items-center justify-center h-full text-gray-400">
                     <p className="text-4xl mb-3">🔒</p>
                     <p className="text-sm">No messages yet</p>
-                    <p className="text-xs mt-1">Messages are end-to-end encrypted</p>
+                    <p className="text-xs mt-1">End-to-end encrypted · AI-powered</p>
                   </div>
                 ) : (
                   <>
                     {messages.map(msg => (
                       <MessageBubble
-                        key={msg.id} message={msg} isOwn={msg.senderId === user.id}
+                        key={msg.id}
+                        message={msg}
+                        isOwn={msg.senderId === user.id}
+                        accessToken={accessToken ?? ''}
                         onReact={handleReact}
                         onEdit={msg.senderId === user.id ? setEditing : undefined}
                         onDelete={msg.senderId === user.id ? handleDelete : undefined}
@@ -248,17 +254,29 @@ export default function ChatPage() {
                 </div>
               )}
 
+              {/* Smart replies — above input */}
+              {activeChatId && accessToken && !editingMsg && (
+                <SmartReplies
+                  chatId={activeChatId}
+                  accessToken={accessToken}
+                  lastMessageAt={lastMessageAt}
+                  onSelect={(text) => setInputText(text)}
+                />
+              )}
+
               <MessageInput
+                key={inputText} // reset when smart reply selected
                 onSend={editingMsg ? (t) => { void handleEdit(editingMsg.id, t) } : handleSend}
                 onTypingStart={() => activeChatId && socket?.emit('typing:start', activeChatId)}
-                onTypingStop={()  => activeChatId && socket?.emit('typing:stop', activeChatId)}
+                onTypingStop={()  => activeChatId && socket?.emit('typing:stop',  activeChatId)}
+                initialText={inputText}
               />
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-gray-400">
               <p className="text-6xl mb-4">💬</p>
               <p className="font-medium text-gray-600 dark:text-gray-300">Select a conversation</p>
-              <p className="text-sm mt-1">or start a new one</p>
+              <p className="text-sm mt-1">AI summaries · Smart replies · Auto-translate</p>
             </div>
           )}
         </main>
