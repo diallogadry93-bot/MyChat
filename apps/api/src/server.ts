@@ -11,6 +11,7 @@ import { authRoutes }    from './routes/auth.js'
 import { chatRoutes }    from './routes/chats.js'
 import { messageRoutes } from './routes/messages.js'
 import { callRoutes }    from './calls/routes.js'
+import { aiRoutes }      from './ai/routes.js'
 import { sfuManager }    from './calls/sfu.js'
 import { redis, redisPub, redisSub } from './utils/redis.js'
 import { registerSocketHandlers } from './ws/index.js'
@@ -28,7 +29,6 @@ export async function createServer() {
     requestIdHeader: 'x-request-id',
   })
 
-  // ── Security ──────────────────────────────────────────────
   await app.register(fastifyHelmet, {
     contentSecurityPolicy: process.env['NODE_ENV'] === 'production',
   })
@@ -41,8 +41,6 @@ export async function createServer() {
   await app.register(fastifyRateLimit, {
     max: 200, timeWindow: '1 minute', redis, skipOnError: false,
   })
-
-  // ── JWT ───────────────────────────────────────────────────
   await app.register(fastifyJwt, {
     secret: process.env['JWT_SECRET'] ?? 'dev-secret-change-in-production',
     sign:   { expiresIn: '15m' },
@@ -53,17 +51,17 @@ export async function createServer() {
   await app.register(chatRoutes,    { prefix: '/api' })
   await app.register(messageRoutes, { prefix: '/api' })
   await app.register(callRoutes,    { prefix: '/api' })
+  await app.register(aiRoutes,      { prefix: '/api' })
 
-  // ── Health ────────────────────────────────────────────────
   app.get('/health', async () => ({
     status:    'ok',
-    version:   '0.4.0',
+    version:   '0.5.0',
     timestamp: new Date().toISOString(),
     uptime:    process.uptime(),
     sfu:       sfuManager.isAvailable() ? 'ready' : 'unavailable',
+    ai:        process.env['ANTHROPIC_API_KEY'] ? 'configured' : 'no-key',
   }))
 
-  // ── Socket.io ─────────────────────────────────────────────
   const io = new SocketServer<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>(
     app.server,
     {
@@ -76,7 +74,6 @@ export async function createServer() {
   )
 
   io.adapter(createAdapter(redisPub, redisSub))
-
   io.use((socket, next) => {
     const token = socket.handshake.auth['token'] as string | undefined
     if (!token) return next(new Error('Authentication token required'))
@@ -92,13 +89,10 @@ export async function createServer() {
 
   app.decorate('io', io)
   registerSocketHandlers(io)
-
-  // Init SFU worker
   void sfuManager.init()
 
-  // ── Graceful shutdown ─────────────────────────────────────
   const shutdown = async () => {
-    console.info('Shutting down gracefully...')
+    console.info('Shutting down...')
     await io.close()
     await app.close()
     process.exit(0)

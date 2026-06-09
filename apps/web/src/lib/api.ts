@@ -78,3 +78,31 @@ export const api = {
       }),
   },
 }
+
+// ── AI endpoints ──────────────────────────────────────────
+type ToneLabel = 'friendly' | 'formal' | 'tense' | 'urgent' | 'neutral'
+
+interface SmartReply { text: string; tone: string }
+interface SummaryResult { bullets: string[]; timeRange: string; count: number }
+
+// Extend api object (module augmentation pattern)
+Object.assign(api, {
+  ai: {
+    summary: (token: string, chatId: string, limit = 50) =>
+      request<{ summary: SummaryResult | null; reason?: string }>(
+        `/api/ai/summary/${chatId}?limit=${limit}`, { token }
+      ),
+    smartReplies: (token: string, chatId: string, lang = 'en') =>
+      request<{ replies: SmartReply[] }>('/api/ai/smart-replies', {
+        method: 'POST', token, body: JSON.stringify({ chatId, lang }),
+      }),
+    tone: (token: string, text: string) =>
+      request<{ tone: ToneLabel }>('/api/ai/tone', {
+        method: 'POST', token, body: JSON.stringify({ text }),
+      }),
+    translate: (token: string, messageId: string, targetLanguage: string) =>
+      request<{ translated: string; targetLanguage: string; messageId: string }>('/api/ai/translate', {
+        method: 'POST', token, body: JSON.stringify({ messageId, targetLanguage }),
+      }),
+  },
+})

@@ -74,3 +74,17 @@ export interface CallLog {
   endedAt:         Date | null
   durationSeconds: number | null
 }
+
+// ── AI types ───────────────────────────────────────────────
+export type ToneLabel = 'friendly' | 'formal' | 'tense' | 'urgent' | 'neutral'
+
+export interface SmartReply {
+  text: string
+  tone: 'friendly' | 'formal' | 'brief'
+}
+
+export interface SummaryResult {
+  bullets:   string[]
+  timeRange: string
+  count:     number
+}
